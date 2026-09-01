@@ -16462,6 +16462,10 @@ export interface SandboxConfig {
    * Whether to auto-grant read access to tool directories discovered on PATH and in toolchain environment variables (GOROOT, JAVA_HOME, VIRTUAL_ENV, and similar), and to common developer-tool caches, config, and toolchains. Writable grants cover scratch caches, the Unix GitHub CLI cache, and Cargo's registry, git store, and lock/tracker files. A relocated CARGO_HOME gets the same narrow split: registry and git are read-write; bin is read-only; the home root, config.toml, and credentials.toml stay ungranted. Set to false to disable every grant listed above; user-installed toolchains and caches then need explicit userPolicy.filesystem readonlyPaths and readwritePaths entries. The working directory (see addCurrentWorkingDirectory), temporary storage, session log paths, and system locations follow their own rules and stay granted. Default: true (enabled by default; set to false to opt out).
    */
   allowDevToolAccess?: boolean;
+  /**
+   * Host capability flag (not part of the sandbox policy): when set, exposes a per-command escape hatch so the model can request individual commands run outside the sandbox. Stripped from the effective spawn policy.
+   */
+  allowBypass?: boolean;
 }
 /**
  * User-managed sandbox policy fragment merged into the auto-discovered base policy.

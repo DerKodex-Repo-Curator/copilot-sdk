@@ -30388,21 +30388,30 @@ class SandboxConfig:
     user_policy: SandboxConfigUserPolicy | None = None
     """User-managed sandbox policy fragment merged into the auto-discovered base policy."""
 
+    allow_bypass: bool | None = None
+    """Host capability flag (not part of the sandbox policy): when set, exposes a per-command
+    escape hatch so the model can request individual commands run outside the sandbox.
+    Stripped from the effective spawn policy.
+    """
+
     @staticmethod
     def from_dict(obj: Any) -> 'SandboxConfig':
         assert isinstance(obj, dict)
         enabled = from_bool(obj.get("enabled"))
         add_current_working_directory = from_union([from_bool, from_none], obj.get("addCurrentWorkingDirectory"))
+        allow_bypass = from_union([from_bool, from_none], obj.get("allowBypass"))
         allow_dev_tool_access = from_union([from_bool, from_none], obj.get("allowDevToolAccess"))
         auth = from_union([SandboxConfigAuth.from_dict, from_none], obj.get("auth"))
         user_policy = from_union([SandboxConfigUserPolicy.from_dict, from_none], obj.get("userPolicy"))
-        return SandboxConfig(enabled, add_current_working_directory, allow_dev_tool_access, auth, user_policy)
+        return SandboxConfig(enabled, add_current_working_directory, allow_dev_tool_access, auth, user_policy, allow_bypass)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["enabled"] = from_bool(self.enabled)
         if self.add_current_working_directory is not None:
             result["addCurrentWorkingDirectory"] = from_union([from_bool, from_none], self.add_current_working_directory)
+        if self.allow_bypass is not None:
+            result["allowBypass"] = from_union([from_bool, from_none], self.allow_bypass)
         if self.allow_dev_tool_access is not None:
             result["allowDevToolAccess"] = from_union([from_bool, from_none], self.allow_dev_tool_access)
         if self.auth is not None:

@@ -12,6 +12,7 @@ import type { JSONSchema7, JSONSchema7Definition } from "json-schema";
 import { fileURLToPath } from "url";
 import {
     addManagedApprovalRequiredToPermissionRequests,
+    addSandboxAllowBypass,
     cloneSchemaForCodegen,
     filterNodeByVisibility,
     fixNullableRequiredRefsInApiSchema,
@@ -1375,13 +1376,13 @@ function removeShadowedSessionEventEnumsForPython(
         .replace(/\n{3,}/g, "\n\n");
 }
 
-function reorderPythonDataclassFields(code: string): string {
+function reorderPythonDataclassFields(code: string, definitions: Record<string, JSONSchema7>): string {
     const fieldRe =
         /^    \w+: (?:Any|bool|int|float|str|dict|list|ClassVar|[A-Z_]\w*|['"][A-Z_]\w*)(?:[^=]*)?(?: = .*)?$/;
     const methodRe = /^    (?:@(?:staticmethod|classmethod|property)|(?:async\s+)?def\s+)/;
-    const classBlockRe = /(@dataclass\r?\nclass\s+\w+:[\s\S]*?)(?=^@dataclass|^class\s+\w|^def\s+\w|\Z)/gm;
+    const classBlockRe = /@dataclass\r?\nclass\s+(\w+):[\s\S]*?(?=^@dataclass|^class\s+\w|^def\s+\w|\Z)/gm;
 
-    return code.replace(classBlockRe, (block: string) => {
+    return code.replace(classBlockRe, (block: string, className: string) => {
         const lines = block.split("\n");
         const bodyStart = 2;
         const memberStart = lines.findIndex((line, index) => index >= bodyStart && methodRe.test(line));
@@ -1416,13 +1417,41 @@ function reorderPythonDataclassFields(code: string): string {
 
         const required = groups.filter((group) => !group[0].includes(" = "));
         const optional = groups.filter((group) => group[0].includes(" = "));
-        const reorderedGroups = [...required, ...optional];
-        const changed = reorderedGroups.some((group, index) => group !== groups[index]);
+        const appendLastFields = new Set(
+            Object.entries(definitions[className]?.properties ?? {})
+                .filter(
+                    ([, property]) =>
+                        typeof property === "object" &&
+                        (property as Record<string, unknown>)["x-copilot-sdk-append-last"] === true
+                )
+                .map(([name]) => toSnakeCase(name))
+        );
+        const appendLast = optional.filter((group) => {
+            const fieldName = group[0].match(/^    (\w+):/)?.[1];
+            return fieldName !== undefined && appendLastFields.has(fieldName);
+        });
+        const regularOptional = optional.filter((group) => !appendLast.includes(group));
+        const lastAppendOnlyGroup = appendLast.at(-1);
+        if (lastAppendOnlyGroup && lastAppendOnlyGroup.at(-1) !== "") {
+            lastAppendOnlyGroup.push("");
+        }
+        const reorderedGroups = [...required, ...regularOptional, ...appendLast];
+        const reorderedMembers = members.map((line) => {
+            const match = line.match(new RegExp(`^(\\s+return ${className}\\()([A-Za-z_]\\w*(?:, [A-Za-z_]\\w*)*)(\\))$`));
+            if (!match || appendLastFields.size === 0) return line;
+            const args = match[2].split(", ");
+            const regularArgs = args.filter((arg) => !appendLastFields.has(arg));
+            const appendLastArgs = args.filter((arg) => appendLastFields.has(arg));
+            return `${match[1]}${[...regularArgs, ...appendLastArgs].join(", ")}${match[3]}`;
+        });
+        const changed =
+            reorderedGroups.some((group, index) => group !== groups[index]) ||
+            reorderedMembers.some((line, index) => line !== members[index]);
         if (!changed) {
             return block;
         }
 
-        return [...header, ...preamble, ...reorderedGroups.flat(), ...members].join("\n");
+        return [...header, ...preamble, ...reorderedGroups.flat(), ...reorderedMembers].join("\n");
     });
 }
 
@@ -2988,7 +3017,11 @@ async function generateRpc(schemaPath?: string, sessionEventsSchema?: JSONSchema
     const { FetchingJSONSchemaStore, InputData, JSONSchemaInput, quicktype } = await import("quicktype-core");
 
     const resolvedPath = schemaPath ?? (await getApiSchemaPath());
-    let schema = fixNullableRequiredRefsInApiSchema(cloneSchemaForCodegen((await loadSchemaJson(resolvedPath)) as ApiSchema));
+    let schema = fixNullableRequiredRefsInApiSchema(
+        cloneSchemaForCodegen(
+            addSandboxAllowBypass((await loadSchemaJson(resolvedPath)) as JSONSchema7) as unknown as ApiSchema
+        )
+    );
     if (sessionEventsSchema) {
         const sharedDefinitions = findSharedSchemaDefinitions(
             schema as unknown as Record<string, unknown>,
@@ -3118,7 +3151,7 @@ async function generateRpc(schemaPath?: string, sessionEventsSchema?: JSONSchema
         }
     );
     typesCode = removeRequiredAnyDefaultsForPython(typesCode, allDefinitions, allDefinitionCollections);
-    typesCode = reorderPythonDataclassFields(typesCode);
+    typesCode = reorderPythonDataclassFields(typesCode, allDefinitions);
     // Fix bare except: to use Exception (required by ruff/pylint)
     typesCode = typesCode.replace(/except:/g, "except Exception:");
     // Remove unnecessary pass when class has methods (quicktype generates pass for empty schemas)

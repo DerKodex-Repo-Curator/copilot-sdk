@@ -15,6 +15,7 @@ import { promisify } from "util";
 import wordwrap from "wordwrap";
 import {
     addManagedApprovalRequiredToPermissionRequests,
+    addSandboxAllowBypass,
     cloneSchemaForCodegen,
     collectDefinitionCollections,
     collectExperimentalOnlyRpcReferencedDefinitionNames,
@@ -3792,7 +3793,13 @@ async function generateRpc(schemaPath?: string): Promise<void> {
     console.log("Go: generating RPC types...");
 
     const resolvedPath = schemaPath ?? (await getApiSchemaPath());
-    const schema = propagateInternalVisibility(fixNullableRequiredRefsInApiSchema(cloneSchemaForCodegen((await loadSchemaJson(resolvedPath)) as ApiSchema)) as JSONSchema7) as unknown as ApiSchema;
+    const schema = propagateInternalVisibility(
+        fixNullableRequiredRefsInApiSchema(
+            cloneSchemaForCodegen(
+                addSandboxAllowBypass((await loadSchemaJson(resolvedPath)) as JSONSchema7) as unknown as ApiSchema
+            )
+        ) as JSONSchema7
+    ) as unknown as ApiSchema;
 
     const allMethods = [
         ...collectRpcMethods(schema.server || {}),

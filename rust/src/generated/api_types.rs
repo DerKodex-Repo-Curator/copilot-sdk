@@ -14752,6 +14752,9 @@ pub struct SandboxConfig {
     /// Whether to auto-add the current working directory to readwritePaths. Default: true.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub add_current_working_directory: Option<bool>,
+    /// Host capability flag (not part of the sandbox policy): when set, exposes a per-command escape hatch so the model can request individual commands run outside the sandbox. Stripped from the effective spawn policy.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_bypass: Option<bool>,
     /// Whether to auto-grant read access to tool directories discovered on PATH and in toolchain environment variables (GOROOT, JAVA_HOME, VIRTUAL_ENV, and similar), and to common developer-tool caches, config, and toolchains. Writable grants cover scratch caches, the Unix GitHub CLI cache, and Cargo's registry, git store, and lock/tracker files. A relocated CARGO_HOME gets the same narrow split: registry and git are read-write; bin is read-only; the home root, config.toml, and credentials.toml stay ungranted. Set to false to disable every grant listed above; user-installed toolchains and caches then need explicit userPolicy.filesystem readonlyPaths and readwritePaths entries. The working directory (see addCurrentWorkingDirectory), temporary storage, session log paths, and system locations follow their own rules and stay granted. Default: true (enabled by default; set to false to opt out).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_dev_tool_access: Option<bool>,

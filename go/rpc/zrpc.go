@@ -10216,6 +10216,10 @@ type RuntimeShutdownResult struct {
 type SandboxConfig struct {
 	// Whether to auto-add the current working directory to readwritePaths. Default: true.
 	AddCurrentWorkingDirectory *bool `json:"addCurrentWorkingDirectory,omitempty"`
+	// Host capability flag (not part of the sandbox policy): when set, exposes a per-command
+	// escape hatch so the model can request individual commands run outside the sandbox.
+	// Stripped from the effective spawn policy.
+	AllowBypass *bool `json:"allowBypass,omitempty"`
 	// Whether to auto-grant read access to tool directories discovered on PATH and in toolchain
 	// environment variables (GOROOT, JAVA_HOME, VIRTUAL_ENV, and similar), and to common
 	// developer-tool caches, config, and toolchains. Writable grants cover scratch caches, the

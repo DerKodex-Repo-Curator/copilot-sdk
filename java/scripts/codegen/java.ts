@@ -12,6 +12,8 @@ import type { JSONSchema7 } from "json-schema";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { addSandboxAllowBypass } from "../../../scripts/codegen/utils.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -1346,7 +1348,13 @@ function generateRpcClass(
         // Record components are always boxed (nullable by design).
         const result = schemaTypeToJava(prop, false, className, propName, localNestedTypes);
         for (const imp of result.imports) imports.add(imp);
-        return [{ propName, javaName: toCamelCase(propName), javaType: result.javaType, description: prop.description }];
+        return [{
+            propName,
+            javaName: toCamelCase(propName),
+            javaType: result.javaType,
+            description: prop.description,
+            appendLast: (prop as Record<string, unknown>)["x-copilot-sdk-append-last"] === true,
+        }];
     });
 
     lines.push(`@JsonInclude(JsonInclude.Include.NON_NULL)`);
@@ -1366,6 +1374,21 @@ function generateRpcClass(
         lines.push(`) {`);
     }
 
+    const appendLastFields = fields.filter((field) => field.appendLast);
+    if (appendLastFields.length > 0) {
+        const compatibilityFields = fields.filter((field) => !field.appendLast);
+        lines.push("");
+        lines.push(`    ${visModifier}${className}(`);
+        for (let i = 0; i < compatibilityFields.length; i++) {
+            const field = compatibilityFields[i];
+            const comma = i < compatibilityFields.length - 1 ? "," : "";
+            lines.push(`        ${field.javaType} ${field.javaName}${comma}`);
+        }
+        lines.push(`    ) {`);
+        lines.push(`        this(${fields.map((field) => field.appendLast ? "null" : field.javaName).join(", ")});`);
+        lines.push(`    }`);
+    }
+
     // Add nested types as nested records/enums inside this record
     for (const [, nested] of localNestedTypes) {
         lines.push(...renderNestedType(nested, 1, new Map(), imports));
@@ -1380,7 +1403,7 @@ function generateRpcClass(
 async function generateRpcTypes(schemaPath: string): Promise<void> {
     console.log("\n🔌 Generating RPC types...");
     const schemaContent = await fs.readFile(schemaPath, "utf-8");
-    const schema = normalizeSchemaBrandCasing(JSON.parse(schemaContent)) as Record<string, unknown> & {
+    const schema = normalizeSchemaBrandCasing(addSandboxAllowBypass(JSON.parse(schemaContent))) as Record<string, unknown> & {
         server?: Record<string, unknown>;
         session?: Record<string, unknown>;
         clientSession?: Record<string, unknown>;
@@ -2235,7 +2258,7 @@ async function generateRpcWrappers(schemaPath: string): Promise<void> {
     console.log("\n🔧 Generating RPC wrapper classes...");
 
     const schemaContent = await fs.readFile(schemaPath, "utf-8");
-    const schema = normalizeSchemaBrandCasing(JSON.parse(schemaContent)) as {
+    const schema = normalizeSchemaBrandCasing(addSandboxAllowBypass(JSON.parse(schemaContent))) as {
         server?: Record<string, unknown>;
         session?: Record<string, unknown>;
         clientSession?: Record<string, unknown>;

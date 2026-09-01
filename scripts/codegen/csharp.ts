@@ -13,6 +13,7 @@ import { fileURLToPath } from "url";
 import { promisify } from "util";
 import type { JSONSchema7 } from "json-schema";
 import {
+    addSandboxAllowBypass,
     cloneSchemaForCodegen,
     fixNullableRequiredRefsInApiSchema,
     getApiSchemaPath,
@@ -2722,7 +2723,11 @@ export async function generateRpc(schemaPath?: string, sessionEventsSchema?: JSO
     console.log("C#: generating RPC types...");
     const resolvedPath = schemaPath ?? (await getApiSchemaPath());
     handWrittenCSharpTypeNames = await collectHandWrittenCSharpTypeNames();
-    let schema = fixNullableRequiredRefsInApiSchema(cloneSchemaForCodegen((await loadSchemaJson(resolvedPath)) as ApiSchema));
+    let schema = fixNullableRequiredRefsInApiSchema(
+        cloneSchemaForCodegen(
+            addSandboxAllowBypass((await loadSchemaJson(resolvedPath)) as JSONSchema7) as unknown as ApiSchema
+        )
+    );
     let sessionEventsCode: string | undefined;
     if (sessionEventsSchema) {
         sessionEventsCode = generateSessionEventsCode(sessionEventsSchema);

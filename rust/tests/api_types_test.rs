@@ -106,19 +106,22 @@ fn permission_event_exposes_managed_approval_required() {
 }
 
 #[test]
-fn sandbox_allow_bypass_serializes_as_optional_camel_case() {
+fn sandbox_allow_bypass_round_trips_as_optional_camel_case() {
     let enabled = SandboxConfig {
         enabled: true,
         allow_bypass: Some(true),
         ..Default::default()
     };
+    let value = serde_json::to_value(enabled).unwrap();
     assert_eq!(
-        serde_json::to_value(enabled).unwrap(),
+        value,
         serde_json::json!({
             "allowBypass": true,
             "enabled": true,
         })
     );
+    let round_tripped: SandboxConfig = serde_json::from_value(value).unwrap();
+    assert_eq!(round_tripped.allow_bypass, Some(true));
 
     let omitted = SandboxConfig {
         enabled: true,
